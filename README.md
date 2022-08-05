@@ -25,10 +25,10 @@ The "finished" code (very much WIP) can be found here:
 - [install nodejs for testing our programs](https://nodejs.dev/learn/how-to-install-nodejs)
 - [install rust for building our programs](https://www.rust-lang.org/tools/install)
 - [install solana cli for running a local node during testing](https://docs.solana.com/cli?utm_source=solana.com)
-- have an account created to use with solana-cli (details below)
+  - have an account created to use with solana-cli (details below)
 - [install anchor cli for deployment and testing of our programs](https://www.anchor-lang.com/docs/installation)
 
-To create an account for the solana-cli simply run the following:
+To create an account for the solana-cli simply run the following (`solana-keygen` is installed after installing solana cli):
 
 ```sh
 solana-keygen new
