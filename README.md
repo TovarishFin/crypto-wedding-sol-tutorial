@@ -9,6 +9,32 @@ In your preferred directory, run:
 anchor init crypto-wedding-program
 ```
 
+**TEMPORARY FIX:** due to some issues with anchor as of 09.08.22, you need to do the following to make rust-analyzer work:
+
+replace
+
+```toml
+[[package]]
+name = "anyhow"
+version = "1.0.60"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c794e162a5eff65c72ef524dfe393eb923c354e350bb78b9c7383df13f3bc142"
+```
+
+with
+
+```toml
+[[package]]
+name = "anyhow"
+version = "1.0.58"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb07d2053ccdbe10e2af2995a2f116c1330396493dc1269f6a91d0ae82e19704"
+```
+
+In the `Cargo.lock` file.
+
+You can track this issue at: https://github.com/coral-xyz/anchor/issues/2111
+
 You should now have a new directory called `crypto-wedding-program`. Let's go check it out!
 
 ```sh
