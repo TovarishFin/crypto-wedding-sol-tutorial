@@ -67,3 +67,7 @@ Check out the [solana stackexchange](https://solana.stackexchange.com). There ar
 ## What should I do after completing this tutorial?
 
 Go build your own project! At this point you probably know enough to build something and/or figure out how to do the new thing that you may need in your future projects.
+
+## Live Tutorial Notes
+
+have some sort of an office hour to help setup environment... though attendees should try to setup everything beforehand
