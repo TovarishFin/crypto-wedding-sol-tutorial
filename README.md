@@ -20,7 +20,7 @@ In our program a user should be able to do the following:
 
 Thats it! Sounds simple right? What could go wrong :)
 
-## A about Solana and Solana programs...
+## A bit about Solana and Solana programs...
 
 Solana is a rather new blockchain which has programs (read smart contracts Ethereans). Where ethereum uses a domain-specific language, solidity, Solana uses rust along with some specialized macros
 to achieve the same goals.
