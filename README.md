@@ -103,7 +103,7 @@ Next, we have `use super::*;`. This basically says "use everything we have in th
 whatever code results from `declare_id`, and our `Initialize` struct further down.
 
 Lastly, we have a function! This is a function that a user can call on the program. Here it is not doing much because this is just default code from `anchor init`. `pub` again means that it is public
-and that it can be called from outside of this module. `fn` declares it as a function. `initialize` is the name of the function we are declaring. `ctx: Context<~Initialize>` is an argument to the function.
+and that it can be called from outside of this module. `fn` declares it as a function. `initialize` is the name of the function we are declaring. `ctx: Context<Initialize>` is an argument to the function.
 This is a pattern specific to anchor. `Context` is what we call a generic type. We can pass in a more specific type here to get something specific to our use case. In our case we are passing in `Initialize`.
 This is declared further down in the code outside of the program. `ctx` will generally contain information about which accounts are being used. Anchor enables us, with the use of `constraints` (more on this later),
 to contol which accounts are passed into the program.
