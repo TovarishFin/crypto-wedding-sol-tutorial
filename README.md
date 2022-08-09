@@ -1,73 +1,42 @@
-# solana crypto wedding tutorial
+# step 0
 
-## About
+Some background information about solana, anchor, and what we are going to be building.
 
-This tutorial covers the following concepts:
+## A bit about what we are building...
 
-- some basic rust programming
-- how to use different networks (localnet, devnet, etc.)
-- program development using Anchor
-- program testing using Anchor
-- how to structure a program
-- the solana account model
-- how to handle errors
-- PDAs (program derived accounts)
-- some basic defensive programming
-- interacting with programs using rust based clients
+We are going to be building a program where users can get married on the blockchain. I have already built this on Ethereum many years ago. You can find Ethereum version deployed along with a frontend
+for it [here](https://cryptoweddings.io). Overall it is a pretty simple program with an easy to grasp concepts.
 
-The "finished" code (very much WIP) can be found here:
+In our program a user should be able to do the following:
 
-- [crypto wedding program](https://github.com/TovarishFin/crypto-wedding-sol)
-- [crypto wedding cli](https://github.com/TovarishFin/crypto-wedding-sol-cli)
+- setup a wedding
+  - cancel it if needed
+- update user information
+  - name
+  - vows
+  - whether or not they agree to get married
+- agree to marry
+- divorce
 
-## Required before starting
+Thats it! Sounds simple right? What could go wrong :)
 
-- [install nodejs for testing our programs](https://nodejs.dev/learn/how-to-install-nodejs)
-- [install rust for building our programs](https://www.rust-lang.org/tools/install)
-- [install solana cli for running a local node during testing](https://docs.solana.com/cli?utm_source=solana.com)
-  - have an account created to use with solana-cli (details below)
-- [install anchor cli for deployment and testing of our programs](https://www.anchor-lang.com/docs/installation)
+## A about Solana and Solana programs...
 
-To create an account for the solana-cli simply run the following (`solana-keygen` is installed after installing solana cli):
+Solana is a rather new blockchain which has programs (read smart contracts Ethereans). Where ethereum uses a domain-specific language, solidity, Solana uses rust along with some specialized macros
+to achieve the same goals.
 
-```sh
-solana-keygen new
-```
+A big difference from Ethereum smart contracts is that Solana programs are stateless. In basic terms, this means that you need to pass in the state upon which the program is acting.
+To repeat, **state and programs are very distinctly seperated in solana**. This concept has big implications in regards to how we think about programs. Further along this line of thinking, we can
+dive a bit into solana's account model.
 
-This will **NOT** overwrite any old keys unless you use `--force` **DO NOT** use `--force` unless you
-know what you are doing and are **sure** that you have **NO FUNDS** on the account.
+Accounts must pay rent to be kept alive. If you pay enough rent for 2 years, the account is considered rent exempt. Nearly everyone simply pays enough to be rent exempt rather than the alternative.
 
-### reccommended
+Accounts as a concept means a pretty wide variety of things in Solana. A program is an account, but cannot have any data. A user has an account which can have a balance but no data. An account can
+act as a data account as well which serves as state that you pass into a program to be acted upon. No matter what, these accounts all need to pay rent in order to stay alive in solana's memory.
 
-- [some sort of rust tooling for your code editor rust-analyzer is considered the best AFAIK](https://rust-analyzer.github.io/)
+Because state and programs are different accounts, you need to pass state into a program. This is one of the most common attack vectors in solana. This is where anchor comes in...
 
-### optional
+## A bit about Anchor...
 
-- [install yarn you can use npm which comes with nodejs as well](https://yarnpkg.com/getting-started/install)
-
-## This Tutorial was Inspired by...
-
-- [this paulx blog post](https://paulx.dev/blog/2021/01/14/programming-on-solana-an-introduction/)
-- [anchor tutorials](https://www.anchor-lang.com/docs/hello-world)
-- [doors vs wheels](https://medium.com/@nicoeft/doors-or-wheels-a-solana-voting-app-in-anchor-using-pdas-and-sol-transfers-9c521cda0b99)
-- [learning how to build on solana](https://www.brianfriel.xyz/learning-how-to-build-on-solana/)
-
-After going through the above tutorials, I more or less felt comfortable branching out and trying something on my own.
-
-## Other nice resources
-
-- [great super fast blunt explanation on how things generally work in solana](https://2501babe.github.io/posts/solana101.html)
-- [great super fast blunt explanation on how things work in anchor](https://2501babe.github.io/posts/anchor101.html)
-- [Metaplex docs. These are the best explanations on how both fungible and non-fungible tokens work that I have found!](https://docs.metaplex.com/programs/)
-
-## What to do when Stuck?
-
-Check out the [solana stackexchange](https://solana.stackexchange.com). There are some very knowledgeable people there. If you post a unique question there it will likely eventually get answered. You just need to be patient and wait :)
-
-## What should I do after completing this tutorial?
-
-Go build your own project! At this point you probably know enough to build something and/or figure out how to do the new thing that you may need in your future projects.
-
-## Live Tutorial Notes
-
-have some sort of an office hour to help setup environment... though attendees should try to setup everything beforehand
+Anchor is a framework which helps solana program developers ensure that correct accounts are passed into programs and generally abstracts away a lot of the lower level tedious parts of solana program
+development. It also makes testing and deploying programs much more simple via typescript. If you are coming from Ethereum, Anchor is something like truffle.
