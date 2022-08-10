@@ -337,4 +337,83 @@ accounts we are passing in, what types they are, what data they contain, ensures
  our two partners. In the function body, we set the `Wedding` storage and retun `Ok(())`.
 
  Whew... that was quite a bit... everything after this should be easier. Congrats on making
- it to this point. Go have a beer or something and then try the next step. :)
+ it to this point. 
+
+## One last check...
+There is one more thing that we want to add in here...
+
+We want to make sure that a user has not created their `Partner` account yet. We want to be
+sure that the `partner0` and `partner1` accounts we pass in are empty. This is because we 
+want to make sure that these partners are not part of another `Wedding`. We can do this with
+following code: 
+
+```rust
+// checks if partner is able to get married (not married to another initialized elsewhere)
+fn validate_partner(partner: &UncheckedAccount) -> Result<()> {
+    let partner = partner.to_account_info();
+
+    // partner PDA should not have any data yet
+    let data_empty = partner.data_is_empty();
+    if !data_empty {
+        return Err(WeddingError::PartnerDataNotEmpty.into());
+    }
+
+    // partner PDA should not have rent paid yet
+    let lamps = partner.lamports();
+    let has_lamps = lamps > 0;
+    if has_lamps {
+        return Err(WeddingError::PartnerBalanceNotZero.into());
+    }
+
+    Ok(())
+}
+```
+
+Here we are passing in an `UncheckedAccount` to make sure that we are passing in an
+uninitialized account. We check this by ensuring that there is no data on the account and
+that the balance is 0. If either of these checks fail we are going to return an error
+which will cause the transaction to fail and exit early.
+
+and we can use it here:
+
+```rust
+pub fn setup_wedding(ctx: Context<SetupWedding>) -> Result<()> {
+    let wedding = &mut ctx.accounts.wedding;
+
+    // check that both partners have 0 balance, data, and not owned by anyone
+    validate_partner(&ctx.accounts.partner0)?;
+    validate_partner(&ctx.accounts.partner1)?;
+
+    wedding.status = Status::Created;
+    wedding.creator = *ctx.accounts.creator.key;
+    wedding.partner0 = *ctx.accounts.partner0.key;
+    wedding.partner1 = *ctx.accounts.partner1.key;
+
+    Ok(())
+}
+```
+
+We also need to setup the errors that we were returning in `validate_partner`:
+```rust
+#[error_code]
+pub enum WeddingError {
+    #[msg("partner data not empty")]
+    PartnerDataNotEmpty,
+    #[msg("partner lamports not zero")]
+    PartnerBalanceNotZero,
+}
+```
+
+In the above code, we are using another "magic" macro to setup an Anchor error. The `#[error_code]`
+macro sets up the code needed to make our `WeddingError` enum into something our program
+can use and return in our `Result` type.
+
+The `#[msg]` macro allows us to return an error message. We will add to this throughout the 
+tutorial for different error cases.
+
+## testing
+We now are going to write a typescript based test in order to see that our program works as
+expected. Open up `tests/crypto-wedding-program.ts`.
+
+
+
