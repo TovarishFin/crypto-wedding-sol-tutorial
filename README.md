@@ -190,7 +190,7 @@ transactions in parallel if it knows that the accounts are not being touched by 
 
 But what are these `#[account()]` macros?
 
-## Anchor account consntraints
+## Anchor account constraints
 
 In Anchor, you are able to set what are called constraints. These do different things depending on what is passed into the `#[account]` macro. Let's look at the macro for the `wedding` field.
 
@@ -640,7 +640,7 @@ anchor.setProvider(provider);
 
 Here we are settig up our connection to our local blockchain. And having anchor use it.
 
-```typscript
+```typescript
 // e for executable
 const eCryptoWedding = anchor.workspace
   .CryptoWedding as Program<CryptoWedding>;
