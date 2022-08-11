@@ -723,4 +723,4 @@ with a relevant letter. `uPartner0` for user, `pPartner` for PDA, `eCryptoWeddin
 
 ## In the next step...
 
-In the next step we will work on our next function, `setup_partner` and some tests to go with it.
+In the next step we will work on our next function, `cancel_wedding` and some tests to go with it.
