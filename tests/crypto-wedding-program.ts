@@ -76,4 +76,30 @@ describe("when using CryptoWeddingProgram", () => {
     expect(dWedding.partner1).to.eql(pPartner1);
     expect(dWedding.status).to.eql(WeddingCreated);
   });
+
+  it("should cancel a wedding", async () => {
+    try {
+      await eCryptoWedding.methods
+        .cancelWedding()
+        .accounts({
+          user: uPartner0.publicKey,
+          creator: uCreator.publicKey,
+          userPartner0: uPartner0.publicKey,
+          userPartner1: uPartner1.publicKey,
+          wedding: pWedding,
+        })
+        .signers([uPartner0])
+        .rpc();
+
+      try {
+        await eCryptoWedding.account.wedding.fetch(pWedding);
+        throw new Error("pWedding should not exist");
+      } catch (err) {
+        expect(String(err)).to.include("Account does not exist");
+      }
+    } catch (err) {
+      console.error(err);
+      throw new Error(err);
+    }
+  });
 });
