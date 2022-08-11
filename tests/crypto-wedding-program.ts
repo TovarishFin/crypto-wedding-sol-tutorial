@@ -51,6 +51,24 @@ describe("when using CryptoWeddingProgram", () => {
     ]);
   });
 
+  it("should NOT setupPartner when no wedding PDA", async () => {
+    try {
+      await eCryptoWedding.methods
+        .setupPartner("bob", "stuff")
+        .accounts({
+          user: uPartner0.publicKey,
+          other: uPartner1.publicKey,
+          partner: pPartner0,
+          wedding: pWedding,
+        })
+        .signers([uPartner0])
+        .rpc();
+      expect.fail("setupPartner should fail before a pWedding is created");
+    } catch (err) {
+      expect(String(err)).to.contain("Error Code: AccountNotInitialized.");
+    }
+  });
+
   it("should setup a wedding as a non-partner (creator)", async () => {
     try {
       await eCryptoWedding.methods
@@ -77,6 +95,34 @@ describe("when using CryptoWeddingProgram", () => {
     expect(dWedding.status).to.eql(WeddingCreated);
   });
 
+  it("should setup partner0 as user0", async () => {
+    const pName = "bob";
+    const pVows = "stuff";
+
+    try {
+      await eCryptoWedding.methods
+        .setupPartner(pName, pVows)
+        .accounts({
+          user: uPartner0.publicKey,
+          other: uPartner1.publicKey,
+          partner: pPartner0,
+          wedding: pWedding,
+        })
+        .signers([uPartner0])
+        .rpc();
+    } catch (err) {
+      console.error(err);
+      throw new Error(err);
+    }
+
+    const sPartner0 = await eCryptoWedding.account.partner.fetch(pPartner0);
+    expect(sPartner0.wedding).to.eql(pWedding);
+    expect(sPartner0.user).to.eql(uPartner0.publicKey);
+    expect(sPartner0.name).to.equal(pName);
+    expect(sPartner0.vows).to.equal(pVows);
+    expect(sPartner0.answer).to.equal(false);
+  });
+
   it("should cancel a wedding", async () => {
     try {
       await eCryptoWedding.methods
@@ -94,6 +140,31 @@ describe("when using CryptoWeddingProgram", () => {
       try {
         await eCryptoWedding.account.wedding.fetch(pWedding);
         throw new Error("pWedding should not exist");
+      } catch (err) {
+        expect(String(err)).to.include("Account does not exist");
+      }
+    } catch (err) {
+      console.error(err);
+      throw new Error(err);
+    }
+  });
+
+  it("should close partner0 as user0", async () => {
+    try {
+      await eCryptoWedding.methods
+        .closePartner()
+        .accounts({
+          user: uPartner0.publicKey,
+          other: uPartner1.publicKey,
+          partner: pPartner0,
+          wedding: pWedding,
+        })
+        .signers([uPartner0])
+        .rpc();
+
+      try {
+        await eCryptoWedding.account.partner.fetch(pPartner0);
+        expect.fail("pPartner0 should no longer exist");
       } catch (err) {
         expect(String(err)).to.include("Account does not exist");
       }

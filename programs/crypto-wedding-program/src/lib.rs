@@ -50,6 +50,32 @@ pub mod crypto_wedding_program {
 
         Ok(())
     }
+
+    /// sets up partner storage account for a user. Gets everything ready short of the answer.
+    pub fn setup_partner(ctx: Context<SetupPartner>, name: String, vows: String) -> Result<()> {
+        let partner = &mut ctx.accounts.partner;
+        partner.wedding = ctx.accounts.wedding.key();
+        partner.user = ctx.accounts.user.key();
+        partner.name = name;
+        partner.vows = vows;
+
+        Ok(())
+    }
+
+    pub fn close_partner(ctx: Context<ClosePartner>) -> Result<()> {
+        // should only be able to close if Wedding PDA no longer exists
+        let wedding_initialized = check_account_initialized(&ctx.accounts.wedding);
+        if wedding_initialized {
+            return Err(WeddingError::WeddingInitialized.into());
+        }
+
+        // return storage costs to user who created partner PDA storage
+        ctx.accounts
+            .partner
+            .close(ctx.accounts.user.to_account_info())?;
+
+        Ok(())
+    }
 }
 
 // checks if partner is able to get married (not married to another initialized elsewhere)
@@ -137,6 +163,70 @@ pub struct CancelWedding<'info> {
     pub wedding: Account<'info, Wedding>,
 }
 
+#[derive(Accounts)]
+#[instruction(name: String, vows: String)]
+pub struct SetupPartner<'info> {
+    #[account(mut)]
+    /// One of the user partners getting married
+    pub user: Signer<'info>,
+    /// The other user partner that `user` is getting married to.
+    /// CHECK: only used for computing wedding PDA
+    pub other: AccountInfo<'info>,
+    #[account(
+        init,
+        payer = user,
+        space = Partner::space(&name, &vows),
+        seeds = [
+            b"partner",
+            user.key().as_ref(),
+        ],
+        bump,
+    )]
+    /// Partner storage account derived from the `user`
+    pub partner: Account<'info, Partner>,
+    #[account(
+        seeds = [
+            b"wedding",
+            Wedding::seed_partner0(user.key, other.key).key().as_ref(),
+            Wedding::seed_partner1(user.key, other.key).key().as_ref(),
+        ],
+        bump,
+    )]
+    /// Wedding storage account
+    pub wedding: Account<'info, Wedding>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ClosePartner<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
+    /// CHECK: this is only used to compute wedding PDA
+    pub other: AccountInfo<'info>,
+    #[account(
+        mut,
+        seeds = [
+            b"partner",
+            user.key().as_ref(),
+        ],
+        bump,
+    )]
+    // ensures that user cannot supply false `other` account by checking partner storage
+    #[account(has_one = wedding @ WeddingError::PartnerWeddingNotWedding)]
+    pub partner: Account<'info, Partner>,
+    #[account(
+        seeds = [
+            b"wedding",
+            Wedding::seed_partner0(user.key, other.key).key().as_ref(),
+            Wedding::seed_partner1(user.key, other.key).key().as_ref(),
+        ],
+        bump,
+    )]
+    /// CHECK: this is only used for ensuring non-existance false `other` account is checked via
+    /// user partner PDA
+    pub wedding: UncheckedAccount<'info>,
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq, Debug)]
 pub enum Status {
     Created,
@@ -146,12 +236,22 @@ pub enum Status {
     Divorced,
 }
 
-pub fn sort_pubkeys<'a>(pubkey_a: &'a Pubkey, pubkey_b: &'a Pubkey) -> (&'a Pubkey, &'a Pubkey) {
+fn sort_pubkeys<'a>(pubkey_a: &'a Pubkey, pubkey_b: &'a Pubkey) -> (&'a Pubkey, &'a Pubkey) {
     match pubkey_a.cmp(pubkey_b) {
         Ordering::Less => (pubkey_a, pubkey_b),
         Ordering::Greater => (pubkey_b, pubkey_a),
         Ordering::Equal => (pubkey_a, pubkey_b),
     }
+}
+
+fn check_account_initialized(account: &UncheckedAccount) -> bool {
+    let account = account.to_account_info();
+
+    let data_empty = account.data_is_empty();
+    let lamps = account.lamports();
+    let has_lamps = lamps > 0;
+
+    !data_empty || has_lamps
 }
 
 #[account]
@@ -181,6 +281,22 @@ impl Wedding {
     }
 }
 
+#[account]
+pub struct Partner {
+    pub wedding: Pubkey,
+    pub user: Pubkey,
+    pub name: String,
+    pub vows: String,
+    pub answer: bool,
+}
+
+impl Partner {
+    pub fn space(name: &str, vows: &str) -> usize {
+        // discriminator + 2 * pubkey + nameLen + name + vowsLen + vows + bool
+        8 + (32 * 2) + 4 + name.len() + 4 + vows.len() + 1
+    }
+}
+
 #[error_code]
 pub enum WeddingError {
     #[msg("partner data not empty")]
@@ -193,4 +309,8 @@ pub enum WeddingError {
     CannotCancel,
     #[msg("creator does not match wedding storage")]
     InvalidCreator,
+    #[msg("partner cannot be closed while wedding is initialized")]
+    WeddingInitialized,
+    #[msg("partner wedding does not match account wedding")]
+    PartnerWeddingNotWedding,
 }
