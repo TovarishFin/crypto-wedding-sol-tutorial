@@ -720,3 +720,7 @@ We make sure that everything matches what we expect and we are good to go!
 Because accounts can have so many different roles and hidden meanings... I try to prepend names
 with a relevant letter. `uPartner0` for user, `pPartner` for PDA, `eCryptoWedding` for executable,
 `dWedding` for data etc.
+
+## In the next step...
+
+In the next step we will work on our next function, `setup_partner` and some tests to go with it.
