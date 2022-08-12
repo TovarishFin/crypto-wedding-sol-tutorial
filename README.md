@@ -1,79 +1,52 @@
-# step 4
+# step 5
 
-In this step we will implement two functions. one called `setup_partner`, and another called
-`close_partner`. `setup_partner` will enable a user to create a storage account tied to
-our program where they can save data such as their `name`, `vows`, and their `answer` (whether or not they agree to marry).
+In this step, we will implement that last two needed functions, `give_answer` and `divorce`.
+Of course we are also going to write tests for them to see them in action as well. Let's start
+with `give_answer`...
 
-## setup_partner placeholder
+## give_answer placeholder
 
-Like last time, lets setup a placeholder function and work our way from there...
+Let's start with our placeholder again:
 
 ```rust
-pub fn setup_partner(ctx: Context<SetupPartner>, name: String, vows: String) -> Result<()> {
+pub fn give_answer(ctx: Context<GiveAnswer>, answer: bool) -> Result<()> {
     Ok(())
 }
 ```
 
-In the above code, we finally see some arguments to a function other than our `ctx`. Nice.
+Nothing new here... we have seen function parameters as well in `setup_partner`.
+On to the `GiveAnswer` context struct...
 
-Let's change the order a bit this time and think about what we want to store...
-
-## Partner storage account
-
-```rust
-#[account]
-pub struct Partner {
-    pub wedding: Pubkey,
-    pub user: Pubkey,
-    pub name: String,
-    pub vows: String,
-    pub answer: bool,
-}
-
-impl Partner {
-    pub fn space(name: &str, vows: &str) -> usize {
-        // discriminator + 2 * pubkey + nameLen + name + vowsLen + vows + bool
-        8 + (32 * 2) + 4 + name.len() + 4 + vows.len() + 1
-    }
-}
-```
-
-We add the `#[account]` macro again same as `Wedding` before to make this useable as an
-account where we want to store things.
-
-As said earlier, we are going to store, `name`, `vows`, and an `answer`. We probably also want
-to tie a `Partner` storage account to a `Wedding` storage account. So let's also save `wedding`
-as a field. Let's also just save the `user`s pubkey here for clarity as well.
-
-Lastly, and again like `Wedding`, we add an associated function where we calculate the space.
-It is more useful and even necessary here because we need to calculate the dynamic space of
-`String` types. This function will be used in our constraints when creating the account.
-
-Let's go ahead and look at our `SetupPartner` context struct.
+## GiveAnswer context struct
 
 ```rust
 #[derive(Accounts)]
-#[instruction(name: String, vows: String)]
-pub struct SetupPartner<'info> {
+pub struct GiveAnswer<'info> {
     #[account(mut)]
-    /// One of the user partners getting married
     pub user: Signer<'info>,
-    /// The other user partner that `user` is getting married to.
-    /// CHECK: only used for computing wedding PDA
+    /// CHECK: this is only used to compute wedding PDA
     pub other: AccountInfo<'info>,
     #[account(
-        init,
-        payer = user,
-        space = Partner::space(&name, &vows),
+        mut,
         seeds = [
             b"partner",
             user.key().as_ref(),
         ],
         bump,
+        has_one = wedding @ WeddingError::PartnerWeddingNotWedding,
     )]
-    /// Partner storage account derived from the `user`
     pub partner: Account<'info, Partner>,
     #[account(
+        seeds = [
+            b"partner",
+            other.key().as_ref(),
+        ],
+        bump,
+        has_one = wedding @ WeddingError::PartnerWeddingNotWedding,
+    )]
+    pub other_partner: Account<'info, Partner>,
+    #[account(
+        mut,
         seeds = [
             b"wedding",
             Wedding::seed_partner0(user.key, other.key).key().as_ref(),
@@ -81,151 +54,80 @@ pub struct SetupPartner<'info> {
         ],
         bump,
     )]
-    /// Wedding storage account
+    // ensure that Wedding PDA exists before updating
     pub wedding: Account<'info, Wedding>,
     pub system_program: Program<'info, System>,
 }
 ```
 
-Everything here should be somewhat familiar to you from our previous steps. The only strange thing
-here should be:
+Again, these are all things we have seen before... let's just try to summarize what we are doing
+here:
+
+We have `user` which can be either of the partners of a wedding. We are checking this by using
+`seeds` to ensure they have a `Partner` storage account that is tied to a `Wedding` storage
+account. We make sure that the user calling is a member of the `Wedding` storage account through
+the `has_one` constraint. Passing in the wedding and each partner PDA into our context ensures
+that they exist and that they are the correct account type.
+
+So with this layout we can ensure that the user calling has a partner PDA and that that partner PDA
+is tied to the wedding PDA they are trying to interact with.
+
+Hopefully this is all starting to make sense to you.
+
+Let's move on to the function body:
 
 ```rust
-#[instruction(name: String, vows: String)]
-```
-
-This macro is giving us access to our function arguments we defined in the beginning of the
-section. Why do we need this?
-
-Here is your answer:
-
-```rust
-space = Partner::space(&name, &vows),
-```
-
-In our partner constraint we need to tell the anchor how big the account is going to be before
-creating it. In order to know how big it is we need our earlier defined function to have
-access to these string arguments.
-
-So summarizing what is going on here:
-
-We have a user which should be either `partner0` or `partner1` We have `other` which should be
-the other partner. We have our `partner` field which is going to be a storage account of type
-`Partner`. It is going to be created in this transaction and will be paid for by the `user` account.
-We pass in the `other` account in order to compute the `Wedding` storage acccount PDA. By passing
-in `wedding` with the seeds, we are ensuring that the wedding exists. Which means that user's need
-to wait for a wedding to be created before calling `setup_partner`. Because `init` is added for
-`partner` we also ensure that the account doesn't exist yet. A user cannot create multiple
-`partner` storage accounts because of the seeds we are using.
-
-Alright... let's implement the function
-
-## Implementing setup_partner
-
-Because we are letting Anchor take care of most of our constraints, this function is pretty
-simple after we finally get to the actual implementation:
-
-```rust
-/// sets up partner storage account for a user. Gets everything ready short of the answer.
-pub fn setup_partner(ctx: Context<SetupPartner>, name: String, vows: String) -> Result<()> {
+pub fn give_answer(ctx: Context<GiveAnswer>, answer: bool) -> Result<()> {
     let partner = &mut ctx.accounts.partner;
-    partner.wedding = ctx.accounts.wedding.key();
-    partner.user = ctx.accounts.user.key();
-    partner.name = name;
-    partner.vows = vows;
+    let other_partner = &mut ctx.accounts.other_partner;
+    let wedding = &mut ctx.accounts.wedding;
 
-    Ok(())
+    // update partner's answer no matter what as long as its in the right status
+    partner.answer = answer;
+
+    match wedding.status {
+        // if wedding status is created...
+        Status::Created => match answer {
+            // if answer passed in is true...
+            true => {
+                wedding.status = Status::Marrying;
+                Ok(())
+            }
+            // if answer passed in is false... do nothing
+            false => Ok(()),
+        },
+        // if wedding status is marrying...
+        Status::Marrying => match (answer, other_partner.answer) {
+            // if both user answer and other partner's answer is true...
+            (true, true) => {
+                // set wedding status to married
+                wedding.status = Status::Married;
+                Ok(())
+            }
+            // for any other case, do nothing...
+            (_, _) => Ok(()),
+        },
+        // if the wedding status is not created or marrying return an error
+        _ => return Err(WeddingError::InvalidAnswerStatus.into()),
+    }
 }
 ```
 
-All we are doing here is setting the storage that we defined earlier.
+First off we can see that we are updating the `Partner` storage to whatever the user passed in.
+We then use `match` which is something like switch in many other languages but quite a bit more
+powerful. [Read here for more info on matche](https://doc.rust-lang.org/book/ch06-02-match.html).
 
-Onto the tests...
+I have added comments in every part of the match statement in order to try to add clarity
+for those that don't know how `match` statements work...
 
-## Testing setup_partner
+Basically we are saying we only want to allow this function to run if the wedding `status` is
+in `Created` or `Marrying`. We set the partner `answer` field immediately **but**, if we return
+an error then that never happened... transactions are atomic... meaning they either run completely
+or not at all. We check `Created` status and update it to `Marrying` if the user `answer` is `true`.
+We update the wedding `status` to `Married` if both `Partner` storage accounts have an `answer`
+of yes.
 
-Remember to run `anchor build` before getting into the tests to get access to our new function.
-
-Go ahead and open up `tests/crypto-wedding-program.ts` and add this test block to the very
-start of the tests (before the original wedding test).
-
-```typescript
-it("should NOT setupPartner when no wedding PDA", async () => {
-  try {
-    await eCryptoWedding.methods
-      .setupPartner("bob", "stuff")
-      .accounts({
-        user: uPartner0.publicKey,
-        other: uPartner1.publicKey,
-        partner: pPartner0,
-        wedding: pWedding,
-      })
-      .signers([uPartner0])
-      .rpc();
-    expect.fail("setupPartner should fail before a pWedding is created");
-  } catch (err) {
-    expect(String(err)).to.contain("Error Code: AccountNotInitialized.");
-  }
-});
-```
-
-We are again calling our new method `setupPartner` but with arguments this time. We then pass
-in our related accounts like we have done each time. We call as `uPartner0` and still expect
-it to fail because no `Wedding` storage exists yet... AKA "AccountNotInitialized".
-
-Add this next test block between the **setup wedding** and **cancel wedding** blocks:
-
-```typescript
-it("should setup partner0 as user0", async () => {
-  const pName = "bob";
-  const pVows = "stuff";
-
-  try {
-    await eCryptoWedding.methods
-      .setupPartner(pName, pVows)
-      .accounts({
-        user: uPartner0.publicKey,
-        other: uPartner1.publicKey,
-        partner: pPartner0,
-        wedding: pWedding,
-      })
-      .signers([uPartner0])
-      .rpc();
-  } catch (err) {
-    console.error(err);
-    throw new Error(err);
-  }
-
-  const sPartner0 = await eCryptoWedding.account.partner.fetch(pPartner0);
-  expect(sPartner0.wedding).to.eql(pWedding);
-  expect(sPartner0.user).to.eql(uPartner0.publicKey);
-  expect(sPartner0.name).to.equal(pName);
-  expect(sPartner0.vows).to.equal(pVows);
-  expect(sPartner0.answer).to.equal(false);
-});
-```
-
-Here we expect the test to pass calling it in the same way. The only thing that is different
-here is that we have alrelady created the `Wedding` storage account. It should succeed,
-the `Partner` storage should exist, and the storage should match what was passed in.
-
-Run `anchor test` to make sure all of our tests are passing.
-
-## On to close_partner...
-
-We want to allow users to close their `Partner` storage account and get the rent back when there
-is no longer an associated `Wedding` storage account. This function will facilitate that. Let's
-create another placeholder:
-
-```rust
-pub fn close_partner(ctx: Context<ClosePartner>) -> Result<()> {
-    Ok(())
-}
-```
-
-## New error enums
-
-Let's just get the new `WeddingError` enums that we are going to use out of the way:
+## Another error
 
 ```rust
 #[error_code]
@@ -244,20 +146,238 @@ pub enum WeddingError {
     WeddingInitialized,
     #[msg("partner wedding does not match account wedding")]
     PartnerWeddingNotWedding,
+    #[msg("cannot answer during invalid status")]
+    InvalidAnswerStatus,
 }
 ```
 
-On to our `ClosePartner` context struct...
+Add the missing error as so...
 
-## ClosePartner context
+Alright let's move on to a test...
+
+## testing give_answer
+
+Run `anchor build` first as usual...
+
+Add the following outside and after the origial `describe` block.
+
+```typescript
+describe("when using CryptoWeddingProgram through it's full lifecycle", () => {
+  const provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
+  // e for executable
+  const eCryptoWedding = anchor.workspace
+    .CryptoWeddingProgram as Program<CryptoWedding>;
+  // u for user
+  const uPartner0 = anchor.web3.Keypair.generate();
+  // u for user
+  const uPartner1 = anchor.web3.Keypair.generate();
+
+  let pWedding: PublicKey;
+  let pPartner0: PublicKey;
+  let pPartner1: PublicKey;
+
+  before("setup", async () => {
+    pWedding = await generateWeddingPDA(
+      eCryptoWedding.programId,
+      uPartner0.publicKey,
+      uPartner1.publicKey
+    );
+
+    pPartner0 = await generatePartnerPDA(
+      eCryptoWedding.programId,
+      uPartner0.publicKey
+    );
+
+    pPartner1 = await generatePartnerPDA(
+      eCryptoWedding.programId,
+      uPartner1.publicKey
+    );
+
+    // need to add funds to each new account we created
+    await Promise.all([
+      addFunds(provider, uPartner0.publicKey, 100),
+      addFunds(provider, uPartner1.publicKey, 100),
+    ]);
+  });
+
+  it("should setup a wedding as partner0", async () => {
+    try {
+      await eCryptoWedding.methods
+        .setupWedding()
+        .accounts({
+          creator: uPartner0.publicKey,
+          userPartner0: uPartner0.publicKey,
+          userPartner1: uPartner1.publicKey,
+          partner0: pPartner0,
+          partner1: pPartner1,
+          wedding: pWedding,
+        })
+        .signers([uPartner0])
+        .rpc();
+    } catch (err) {
+      console.error(err);
+      console.log(err.programErrorStack[0].toBase58());
+      throw new Error(err);
+    }
+
+    const dWedding = await eCryptoWedding.account.wedding.fetch(pWedding);
+    expect(dWedding.creator).to.eql(uPartner0.publicKey);
+    expect(dWedding.partner0).to.eql(pPartner0);
+    expect(dWedding.partner1).to.eql(pPartner1);
+    expect(dWedding.status).to.eql(WeddingCreated);
+  });
+
+  it("should setup partner0 as user0", async () => {
+    const pName = "bob";
+    const pVows = "stuff";
+
+    try {
+      await eCryptoWedding.methods
+        .setupPartner(pName, pVows)
+        .accounts({
+          user: uPartner0.publicKey,
+          other: uPartner1.publicKey,
+          partner: pPartner0,
+          wedding: pWedding,
+        })
+        .signers([uPartner0])
+        .rpc();
+    } catch (err) {
+      console.error(err);
+      throw new Error(err);
+    }
+
+    const sPartner0 = await eCryptoWedding.account.partner.fetch(pPartner0);
+    expect(sPartner0.wedding).to.eql(pWedding);
+    expect(sPartner0.user).to.eql(uPartner0.publicKey);
+    expect(sPartner0.name).to.equal(pName);
+    expect(sPartner0.vows).to.equal(pVows);
+    expect(sPartner0.answer).to.equal(false);
+  });
+
+  it("should setup partner1 as user1", async () => {
+    const pName = "alice";
+    const pVows = "other stuff";
+
+    try {
+      await eCryptoWedding.methods
+        .setupPartner(pName, pVows)
+        .accounts({
+          user: uPartner1.publicKey,
+          other: uPartner0.publicKey,
+          partner: pPartner1,
+          wedding: pWedding,
+        })
+        .signers([uPartner1])
+        .rpc();
+    } catch (err) {
+      console.error(err);
+      throw new Error(err);
+    }
+
+    const sPartner1 = await eCryptoWedding.account.partner.fetch(pPartner1);
+    expect(sPartner1.wedding).to.eql(pWedding);
+    expect(sPartner1.user).to.eql(uPartner1.publicKey);
+    expect(sPartner1.name).to.equal(pName);
+    expect(sPartner1.vows).to.equal(pVows);
+    expect(sPartner1.answer).to.equal(false);
+  });
+
+  it("should answer yes as user0 and be marrying", async () => {
+    try {
+      await eCryptoWedding.methods
+        .giveAnswer(true)
+        .accounts({
+          user: uPartner0.publicKey,
+          other: uPartner1.publicKey,
+          partner: pPartner0,
+          otherPartner: pPartner1,
+          wedding: pWedding,
+        })
+        .signers([uPartner0])
+        .rpc();
+    } catch (err) {
+      console.error(err);
+      throw new Error(err);
+    }
+
+    const sPartner0 = await eCryptoWedding.account.partner.fetch(pPartner0);
+    expect(sPartner0.wedding).to.eql(pWedding);
+    expect(sPartner0.user).to.eql(uPartner0.publicKey);
+    expect(sPartner0.answer).to.equal(true);
+
+    const sWedding = await eCryptoWedding.account.wedding.fetch(pWedding);
+    expect(sWedding.status).to.eql(WeddingMarrying);
+  });
+
+  it("should answer yes as user1 and be married", async () => {
+    try {
+      await eCryptoWedding.methods
+        .giveAnswer(true)
+        .accounts({
+          user: uPartner1.publicKey,
+          other: uPartner0.publicKey,
+          partner: pPartner1,
+          otherPartner: pPartner0,
+          wedding: pWedding,
+        })
+        .signers([uPartner1])
+        .rpc();
+    } catch (err) {
+      console.error(err);
+      throw new Error(err);
+    }
+
+    const sPartner1 = await eCryptoWedding.account.partner.fetch(pPartner1);
+    expect(sPartner1.wedding).to.eql(pWedding);
+    expect(sPartner1.user).to.eql(uPartner1.publicKey);
+    expect(sPartner1.answer).to.equal(true);
+
+    const sWedding = await eCryptoWedding.account.wedding.fetch(pWedding);
+    expect(sWedding.status).to.eql(WeddingMarried);
+  });
+});
+```
+
+So that's quite a bit... why are we going through all of this trouble? Well, we need to
+have a different branch where we are not cancelling a wedding. In this branch we can also
+test our `divorce` function later. There is actually not much new here...
+
+We mostly copied the pervious describe block, changed the `setup_wedding` test to use one of
+the `partner`s instead of a `creator` account just for the sake of testing another area while we
+are at it. We then added another test where `partner1` also sets up their `partner` storage PDA.
+Lastly, we test each of the `partner`s saying yes by giving an `answer` of `true`.
+
+We fetch the state for the `partner` and associated `wedding` storage accounts and check that
+it is what we expect.
+
+Go ahead and run `anchor test`. Wow look at that 10 passing tests! Such professionalism, much wow.
+
+## onto divorce
+
+Sadly, it makes sense to add a divorce function. Let's go ahead and setup another placeholder.
+
+```rust
+pub fn divorce(ctx: Context<Divorce>) -> Result<()> {
+    Ok(())
+}
+```
+
+And on to our `Divorce` context...
+
+## Divorce context
 
 ```rust
 #[derive(Accounts)]
-pub struct ClosePartner<'info> {
+pub struct Divorce<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
     /// CHECK: this is only used to compute wedding PDA
     pub other: AccountInfo<'info>,
+    /// CHECK: TODO: we are only sending lamps... dont need to check anything
+    #[account(mut)]
+    pub creator: AccountInfo<'info>,
     #[account(
         mut,
         seeds = [
@@ -265,123 +385,190 @@ pub struct ClosePartner<'info> {
             user.key().as_ref(),
         ],
         bump,
+        has_one = wedding @ WeddingError::PartnerWeddingNotWedding,
     )]
-    // ensures that user cannot supply false `other` account by checking partner storage
-    #[account(has_one = wedding @ WeddingError::PartnerWeddingNotWedding)]
     pub partner: Account<'info, Partner>,
     #[account(
+        seeds = [
+            b"partner",
+            other.key().as_ref(),
+        ],
+        bump,
+        has_one = wedding @ WeddingError::PartnerWeddingNotWedding,
+    )]
+    pub other_partner: Account<'info, Partner>,
+    #[account(
+        mut,
         seeds = [
             b"wedding",
             Wedding::seed_partner0(user.key, other.key).key().as_ref(),
             Wedding::seed_partner1(user.key, other.key).key().as_ref(),
         ],
         bump,
+        has_one = creator @ WeddingError::InvalidCreator,
     )]
-    /// CHECK: this is only used for ensuring non-existance false `other` account is checked via
-    /// user partner PDA
-    pub wedding: UncheckedAccount<'info>,
+    // ensure that Wedding PDA exists before updating
+    pub wedding: Account<'info, Wedding>,
+    pub system_program: Program<'info, System>,
 }
 ```
 
-Most all of these constraints have been seen already so let's just summarize what we are trying
-to do here:
+This looks identical to our `GiveAnswer`context struct. And when you think about it we are
+trying to enforce the same thing. We only want a partner of a given wedding to be able to divorce.
 
-We have two partners associated with a `Wedding` storage account. One should be `user` and the `other`, the other.
-We ensure that the user's `Partner` storage account exists to be closed by giving Anchor a
-concrete account type of `Partner`. We ensure the `Partner` account is the `user`'s account
-through the use of the `seeds` constraint. We check that the `wedding` field in the `Partner`
-storage account has a field called wedding and that it matches our `wedding` account passed in
-and computed through `seeds`.
+Let's implement our function...
 
-Alright on to the implementation...
-
-## close_partner implementation
+## divorce implementation
 
 ```rust
-pub fn close_partner(ctx: Context<ClosePartner>) -> Result<()> {
-    // should only be able to close if Wedding PDA no longer exists
-    let wedding_initialized = check_account_initialized(&ctx.accounts.wedding);
-    if wedding_initialized {
-        return Err(WeddingError::WeddingInitialized.into());
+pub fn divorce(ctx: Context<Divorce>) -> Result<()> {
+    let partner = &mut ctx.accounts.partner;
+    let other_partner = &mut ctx.accounts.other_partner;
+    let wedding = &mut ctx.accounts.wedding;
+
+    partner.answer = false;
+
+    match wedding.status {
+        Status::Married => {
+            wedding.status = Status::Divorcing;
+            Ok(())
+        }
+        Status::Divorcing => match other_partner.answer {
+            true => Ok(()),
+            false => wedding.close(ctx.accounts.creator.to_account_info()),
+        },
+        _ => return Err(WeddingError::InvalidDivorceStatus.into()),
     }
-
-    // return storage costs to user who created partner PDA storage
-    ctx.accounts
-        .partner
-        .close(ctx.accounts.user.to_account_info())?;
-
-    Ok(())
 }
 ```
 
-Again, after our extensive set of constraints, we have a rather simple function.
-We call a function which we have not yet implemented. Don't worry we will do that next. It just
-checks that the wedding account no longer exists. As far as I know there is not a way to do this
-though Anchor constraints.
+Again, looks very much like our `give_answer` function but we are doing the opposite.
+We set the user's `Partner` storage account `answer` field to `false` and then make our checks.
+If the `Wedding` storage account has a `status` of `Married` we change it to `Divorcing`.
+If the other `Partner` storage account also has an `answer` of `false`, we close the `Wedding`
+storage account and give the `rent` back to the `creator`.
 
-We then close the account and refund the user the rent. Easy.
+Let's add our last error that is missing...
 
-## check_account_initialized
-
-Below we have our promised function. We simply check if the account has any data or any balance.
-If both are empty, we can be pretty sure that it is not initialized.
+## Again with the errors...
 
 ```rust
-fn check_account_initialized(account: &UncheckedAccount) -> bool {
-    let account = account.to_account_info();
-
-    let data_empty = account.data_is_empty();
-    let lamps = account.lamports();
-    let has_lamps = lamps > 0;
-
-    !data_empty || has_lamps
+#[error_code]
+pub enum WeddingError {
+    #[msg("partner data not empty")]
+    PartnerDataNotEmpty,
+    #[msg("partner lamports not zero")]
+    PartnerBalanceNotZero,
+    #[msg("signer is not wedding member")]
+    NotWeddingMember,
+    #[msg("cannot cancel after created status")]
+    CannotCancel,
+    #[msg("creator does not match wedding storage")]
+    InvalidCreator,
+    #[msg("partner cannot be closed while wedding is initialized")]
+    WeddingInitialized,
+    #[msg("partner wedding does not match account wedding")]
+    PartnerWeddingNotWedding,
+    #[msg("cannot answer during invalid status")]
+    InvalidAnswerStatus,
+    #[msg("cannot divorce during invalid status")]
+    InvalidDivorceStatus,
 }
 ```
 
-## Again with the tests...
+## Our last tests...
 
-Run `anchor build` first.
+Run `Anchor build` as usual...
 
-In the interest of keeping this tutorial from going on forever, we will only test the success case:
+We can finally add our last tests to see how a divorce should look like...
 
 ```typescript
-it("should close partner0 as user0", async () => {
+it("should divorce as user0 and be divorcing", async () => {
   try {
     await eCryptoWedding.methods
-      .closePartner()
+      .divorce()
       .accounts({
         user: uPartner0.publicKey,
         other: uPartner1.publicKey,
+        creator: uPartner0.publicKey,
         partner: pPartner0,
+        otherPartner: pPartner1,
         wedding: pWedding,
       })
       .signers([uPartner0])
       .rpc();
-
-    try {
-      await eCryptoWedding.account.partner.fetch(pPartner0);
-      expect.fail("pPartner0 should no longer exist");
-    } catch (err) {
-      expect(String(err)).to.include("Account does not exist");
-    }
   } catch (err) {
     console.error(err);
     throw new Error(err);
   }
+
+  const sPartner0 = await eCryptoWedding.account.partner.fetch(pPartner0);
+  expect(sPartner0.wedding).to.eql(pWedding);
+  expect(sPartner0.user).to.eql(uPartner0.publicKey);
+  expect(sPartner0.answer).to.equal(false);
+
+  const sWedding = await eCryptoWedding.account.wedding.fetch(pWedding);
+  expect(sWedding.status).to.eql(WeddingDivorcing);
+});
+
+it("should divorce as user1 and be divorced", async () => {
+  try {
+    await eCryptoWedding.methods
+      .divorce()
+      .accounts({
+        user: uPartner1.publicKey,
+        other: uPartner0.publicKey,
+        creator: uPartner0.publicKey,
+        partner: pPartner1,
+        otherPartner: pPartner0,
+        wedding: pWedding,
+      })
+      .signers([uPartner1])
+      .rpc();
+  } catch (err) {
+    console.error(err);
+    throw new Error(err);
+  }
+
+  const sPartner1 = await eCryptoWedding.account.partner.fetch(pPartner1);
+  expect(sPartner1.wedding).to.eql(pWedding);
+  expect(sPartner1.user).to.eql(uPartner1.publicKey);
+  expect(sPartner1.answer).to.equal(false);
+
+  try {
+    await eCryptoWedding.account.wedding.fetch(pWedding);
+    expect.fail("pWedding should no longer contain sWedding");
+  } catch (err) {
+    expect(err.message).to.contain("Account does not exist");
+  }
 });
 ```
 
-Nothing really new here... this test is very simple to our `cancel_wedding` test. We make sure
-the call succeeds and that trying to retrieve data for the no longer existing account fails
-with the expected error.
+This should all be pretty routine here now... we see `user0` `divorce` and expect the
+`wedding` and `partner` storage accounts to match what we want.
 
-Go ahead and call `anchor test` to make sure our tests pass.
+We then call `divorce` as `user1` and check `partner` state and check that `wedding` no longer
+exists.
 
 ## Summary
 
-In this step we have created both the `setup_partner` and `close_partner` functions. These allow
-user's to save data about themselves in relation to the wedding. Allowing users to close these
-accounts makes sense under very specific circumstances and we attempt to enforce that.
+At this point most of what we are doing is hopefully starting to seem pretty routine. We
+implemented a way for users to give their answer about marrying and also divorce after.
+Note that users still would need to call `close_partner` after divorce. This could be done
+automatically in the `divorce` function, but we are trying to get through this tutorial in
+a reasonable amount of time :) . There are many other holes in this program but we are using
+this more as an exercise to learn than anything else. There are additional functions implemented
+in the [repo itself](https://github.com/TovarishFin/crypto-wedding-sol). As an exercise to the
+reader, perhaps think about how you would implement these functions. We could add in `update_name`,
+to manually update the `name` of a `Partner` storage account. Same goes for `vows`. If you are
+feeling bold, you could even try to implement all of the account closing functionality in
+the `divorce` function itself.
 
-In the next step we will implement a few more functions. This should hopefully start to feel
-a bit more routine at this point :) .
+It is also important to note that in Solana, transactions can contain many calls to a contract.
+So perhaps keeping things seperate is fine? This allows more granular control for those building
+a client. They could, in theory, include the `divorce` and `close_partner` calls in the same
+transaction. I'm not sure what is best. I am not an expert :) .
+
+In our next step we are going to deploy our program to the `devnet` cluster. We also will
+take a look at cleaning up our code. Everything for our program is in one file and is starting
+to feel a bit cluttered and gross,

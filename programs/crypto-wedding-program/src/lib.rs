@@ -76,6 +76,53 @@ pub mod crypto_wedding_program {
 
         Ok(())
     }
+
+    pub fn give_answer(ctx: Context<GiveAnswer>, answer: bool) -> Result<()> {
+        let partner = &mut ctx.accounts.partner;
+        let other_partner = &mut ctx.accounts.other_partner;
+        let wedding = &mut ctx.accounts.wedding;
+
+        // update partner's answer no matter what as long as its in the right status
+        partner.answer = answer;
+
+        match wedding.status {
+            Status::Created => match answer {
+                true => {
+                    wedding.status = Status::Marrying;
+                    Ok(())
+                }
+                false => Ok(()),
+            },
+            Status::Marrying => match (answer, other_partner.answer) {
+                (true, true) => {
+                    wedding.status = Status::Married;
+                    Ok(())
+                }
+                (_, _) => Ok(()),
+            },
+            _ => return Err(WeddingError::InvalidAnswerStatus.into()),
+        }
+    }
+
+    pub fn divorce(ctx: Context<Divorce>) -> Result<()> {
+        let partner = &mut ctx.accounts.partner;
+        let other_partner = &mut ctx.accounts.other_partner;
+        let wedding = &mut ctx.accounts.wedding;
+
+        partner.answer = false;
+
+        match wedding.status {
+            Status::Married => {
+                wedding.status = Status::Divorcing;
+                Ok(())
+            }
+            Status::Divorcing => match other_partner.answer {
+                true => Ok(()),
+                false => wedding.close(ctx.accounts.creator.to_account_info()),
+            },
+            _ => return Err(WeddingError::InvalidDivorceStatus.into()),
+        }
+    }
 }
 
 // checks if partner is able to get married (not married to another initialized elsewhere)
@@ -227,6 +274,88 @@ pub struct ClosePartner<'info> {
     pub wedding: UncheckedAccount<'info>,
 }
 
+#[derive(Accounts)]
+pub struct GiveAnswer<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
+    /// CHECK: this is only used to compute wedding PDA
+    pub other: AccountInfo<'info>,
+    #[account(
+        mut,
+        seeds = [
+            b"partner",
+            user.key().as_ref(),
+        ],
+        bump,
+        has_one = wedding @ WeddingError::PartnerWeddingNotWedding,
+    )]
+    pub partner: Account<'info, Partner>,
+    #[account(
+        seeds = [
+            b"partner",
+            other.key().as_ref(),
+        ],
+        bump,
+        has_one = wedding @ WeddingError::PartnerWeddingNotWedding,
+    )]
+    pub other_partner: Account<'info, Partner>,
+    #[account(
+        mut,
+        seeds = [
+            b"wedding",
+            Wedding::seed_partner0(user.key, other.key).key().as_ref(),
+            Wedding::seed_partner1(user.key, other.key).key().as_ref(),
+        ],
+        bump,
+    )]
+    // ensure that Wedding PDA exists before updating
+    pub wedding: Account<'info, Wedding>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct Divorce<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
+    /// CHECK: this is only used to compute wedding PDA
+    pub other: AccountInfo<'info>,
+    /// CHECK: TODO: we are only sending lamps... dont need to check anything
+    #[account(mut)]
+    pub creator: AccountInfo<'info>,
+    #[account(
+        mut,
+        seeds = [
+            b"partner",
+            user.key().as_ref(),
+        ],
+        bump,
+        has_one = wedding @ WeddingError::PartnerWeddingNotWedding,
+    )]
+    pub partner: Account<'info, Partner>,
+    #[account(
+        seeds = [
+            b"partner",
+            other.key().as_ref(),
+        ],
+        bump,
+        has_one = wedding @ WeddingError::PartnerWeddingNotWedding,
+    )]
+    pub other_partner: Account<'info, Partner>,
+    #[account(
+        mut,
+        seeds = [
+            b"wedding",
+            Wedding::seed_partner0(user.key, other.key).key().as_ref(),
+            Wedding::seed_partner1(user.key, other.key).key().as_ref(),
+        ],
+        bump,
+        has_one = creator @ WeddingError::InvalidCreator,
+    )]
+    // ensure that Wedding PDA exists before updating
+    pub wedding: Account<'info, Wedding>,
+    pub system_program: Program<'info, System>,
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq, Debug)]
 pub enum Status {
     Created,
@@ -313,4 +442,8 @@ pub enum WeddingError {
     WeddingInitialized,
     #[msg("partner wedding does not match account wedding")]
     PartnerWeddingNotWedding,
+    #[msg("cannot answer during invalid status")]
+    InvalidAnswerStatus,
+    #[msg("cannot divorce during invalid status")]
+    InvalidDivorceStatus,
 }
