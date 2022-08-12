@@ -39,4 +39,5 @@ Because state and programs are different accounts, you need to pass state into a
 ## A bit about Anchor...
 
 Anchor is a framework which helps solana program developers ensure that correct accounts are passed into programs and generally abstracts away a lot of the lower level tedious parts of solana program
-development. It also makes testing and deploying programs much more simple via typescript. If you are coming from Ethereum, Anchor is something like truffle.
+development. It takes care of the serialization and deserialization of program arguments which is one of the more tedious tasks.
+It also makes testing and deploying programs much more simple via typescript. If you are coming from Ethereum, Anchor is something like truffle.
