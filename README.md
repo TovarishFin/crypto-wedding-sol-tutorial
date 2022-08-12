@@ -20,6 +20,9 @@ In our program a user should be able to do the following:
 
 Thats it! Sounds simple right? What could go wrong :)
 
+### A simple diagram of what we are buildling...
+![the program and the storage types...](https://github.com/tovarishfin/crypto-wedding-sol-tutorial/blob/master/crypto_wedding_diagram.png?raw=true)
+
 ## A bit about Solana and Solana programs...
 
 Solana is a rather new blockchain which has programs (read smart contracts Ethereans). Where ethereum uses a domain-specific language, solidity, Solana uses rust along with some specialized macros
