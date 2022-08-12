@@ -354,7 +354,7 @@ it is what we expect.
 
 Go ahead and run `anchor test`. Wow look at that 10 passing tests! Such professionalism, much wow.
 
-## onto divorce
+## On to divorce
 
 Sadly, it makes sense to add a divorce function. Let's go ahead and setup another placeholder.
 
