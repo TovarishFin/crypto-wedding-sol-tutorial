@@ -2,7 +2,9 @@
 seeds = false
 skip-lint = false
 [programs.localnet]
-crypto_wedding_program = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+crypto_wedding_program = "36qCaAFg7XYye43TD56yqkZv6NAcoWNr87Lad15x6G4v"
+[programs.devnet]
+crypto_wedding_program = "36qCaAFg7XYye43TD56yqkZv6NAcoWNr87Lad15x6G4v"
 
 [registry]
 url = "https://api.apr.dev"
