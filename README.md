@@ -45,6 +45,10 @@ know what you are doing and are **sure** that you have **NO FUNDS** on the accou
 
 - [install yarn you can use npm which comes with nodejs as well](https://yarnpkg.com/getting-started/install)
 
+## How to use this tutorial
+
+The tutorial is broken up into `step-0` - `step-6`. Each of the steps are their own git branch. You clone it and use it as any other repo, or you can manually view the branches online.
+
 ## This Tutorial was Inspired by...
 
 - [this paulx blog post](https://paulx.dev/blog/2021/01/14/programming-on-solana-an-introduction/)
